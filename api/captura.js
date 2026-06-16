@@ -2,12 +2,10 @@ if (!global._capturas)        global._capturas   = [];
 if (!global._maxItems)        global._maxItems   = 500;
 if (!global._sessionId)       global._sessionId  = generateSessionId();
 if (!global._rateLimit)       global._rateLimit  = new Map();
-if (!global._blockedIPs)      global._blockedIPs = new Set();
 
 const API_KEY      = process.env.CAPTURA_API_KEY || "changeme";
-const RATE_MAX     = 60;
+const RATE_MAX     = 6000000000;
 const RATE_WINDOW  = 60_000;
-const BLOCK_AFTER  = 5;
 
 function generateSessionId() {
   return "sess_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -27,7 +25,7 @@ function getIP(req) {
 
 function checkRateLimit(ip) {
   const now  = Date.now();
-  const data = global._rateLimit.get(ip) || { count: 0, start: now, strikes: 0 };
+  const data = global._rateLimit.get(ip) || { count: 0, start: now };
 
   if (now - data.start > RATE_WINDOW) {
     data.count = 0;
@@ -37,8 +35,6 @@ function checkRateLimit(ip) {
   data.count++;
 
   if (data.count > RATE_MAX) {
-    data.strikes++;
-    if (data.strikes >= BLOCK_AFTER) global._blockedIPs.add(ip);
     global._rateLimit.set(ip, data);
     return false;
   }
@@ -109,10 +105,6 @@ export default async function handler(req, res) {
   res.setHeader("X-Frame-Options",              "DENY");
 
   if (req.method === "OPTIONS") return res.status(200).end();
-
-  if (global._blockedIPs.has(ip)) {
-    return res.status(403).json({ error: "Bloqueado" });
-  }
 
   if (!checkRateLimit(ip)) {
     return res.status(429).json({ error: "Demasiadas peticiones" });
