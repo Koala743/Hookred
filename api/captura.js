@@ -1,11 +1,6 @@
-if (!global._capturas)        global._capturas   = [];
-if (!global._maxItems)        global._maxItems   = 500;
-if (!global._sessionId)       global._sessionId  = generateSessionId();
-if (!global._rateLimit)       global._rateLimit  = new Map();
-
-const API_KEY      = process.env.CAPTURA_API_KEY || "changeme";
-const RATE_MAX     = 6000000000;
-const RATE_WINDOW  = 60_000;
+if (!global._capturas)   global._capturas  = [];
+if (!global._maxItems)   global._maxItems  = 500;
+if (!global._sessionId)  global._sessionId = generateSessionId();
 
 function generateSessionId() {
   return "sess_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -13,34 +8,6 @@ function generateSessionId() {
 
 function extractDomain(url) {
   try { return new URL(url).hostname; } catch { return "desconocido"; }
-}
-
-function getIP(req) {
-  return (
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.socket?.remoteAddress ||
-    "unknown"
-  );
-}
-
-function checkRateLimit(ip) {
-  const now  = Date.now();
-  const data = global._rateLimit.get(ip) || { count: 0, start: now };
-
-  if (now - data.start > RATE_WINDOW) {
-    data.count = 0;
-    data.start = now;
-  }
-
-  data.count++;
-
-  if (data.count > RATE_MAX) {
-    global._rateLimit.set(ip, data);
-    return false;
-  }
-
-  global._rateLimit.set(ip, data);
-  return true;
 }
 
 function sanitizeString(val, max = 2048) {
@@ -87,33 +54,22 @@ async function detectarMediaPorContenido(url) {
 }
 
 function esInteresante(item) {
-  if (item.status >= 400)                              return true;
+  if (item.status >= 400)                                    return true;
   if (item.metodo === "POST" && item.mime?.includes("json")) return true;
-  if (item.size_bytes > 5 * 1024 * 1024)              return true;
-  if (item.duration_ms > 3000)                         return true;
-  if (item.media_tipo)                                 return true;
+  if (item.size_bytes > 5 * 1024 * 1024)                    return true;
+  if (item.duration_ms > 3000)                               return true;
+  if (item.media_tipo)                                       return true;
   return false;
 }
 
 export default async function handler(req, res) {
-  const ip = getIP(req);
-
   res.setHeader("Access-Control-Allow-Origin",  "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("X-Content-Type-Options",       "nosniff");
   res.setHeader("X-Frame-Options",              "DENY");
 
   if (req.method === "OPTIONS") return res.status(200).end();
-
-  if (!checkRateLimit(ip)) {
-    return res.status(429).json({ error: "Demasiadas peticiones" });
-  }
-
-  const apiKey = req.headers["x-api-key"] || req.query.key;
-  if (!apiKey || apiKey !== API_KEY) {
-    return res.status(401).json({ error: "No autorizado" });
-  }
 
   if (req.method === "POST") {
     const body = req.body;
